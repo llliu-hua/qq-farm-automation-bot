@@ -244,6 +244,7 @@ const announcementSaving = ref(false)
 const announcementLoading = ref(false)
 const currentAnnouncement = ref<{ content: string, showOnce: boolean, updatedAt: number, shouldShow?: boolean } | null>(null)
 const showThemeDropdown = ref(false)
+const showTokenDropdown = ref(false)
 
 async function handleLogout() {
   await userStore.logout()
@@ -708,20 +709,38 @@ async function copyToken() {
 
     <!-- Token Display (Admin Only) -->
     <div v-if="userStore.isAdmin && userStore.token" class="border-t border-gray-200/50 px-3 py-2 dark:border-gray-700/50">
-      <div class="flex items-center justify-between">
-        <span class="text-xs text-gray-500 font-medium dark:text-gray-400">Token</span>
-        <button
-          class="flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors hover:bg-gray-100 dark:hover:bg-gray-700"
-          :class="tokenCopied ? 'text-green-500' : 'text-gray-500 dark:text-gray-400'"
-          @click="copyToken"
-        >
-          <div v-if="tokenCopied" class="i-carbon-checkmark" />
-          <div v-else class="i-carbon-copy" />
-          <span>{{ tokenCopied ? '已复制' : '复制' }}</span>
-        </button>
-      </div>
-      <div class="mt-1 rounded bg-gray-100/50 px-2 py-1.5 font-mono text-[10px] text-gray-600 break-all dark:bg-gray-700/50 dark:text-gray-400">
-        {{ userStore.token }}
+      <button
+        class="w-full flex items-center justify-between rounded-lg px-3 py-2 transition-colors hover:bg-gray-100/50 dark:hover:bg-gray-700/50"
+        @click="showTokenDropdown = !showTokenDropdown"
+      >
+        <div class="flex items-center gap-2">
+          <div class="i-carbon-key text-sm" :style="{ color: 'var(--theme-primary)' }" />
+          <span class="text-xs text-gray-500 font-medium dark:text-gray-400">Token</span>
+        </div>
+        <div
+          class="i-carbon-chevron-down text-gray-400 transition-transform duration-200"
+          :class="{ 'rotate-180': showTokenDropdown }"
+        />
+      </button>
+      <div
+        v-show="showTokenDropdown"
+        class="px-1 pt-2 transition-all"
+      >
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-[10px] text-gray-400">点击复制</span>
+          <button
+            class="flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors hover:bg-gray-100 dark:hover:bg-gray-700"
+            :class="tokenCopied ? 'text-green-500' : 'text-gray-500 dark:text-gray-400'"
+            @click="copyToken"
+          >
+            <div v-if="tokenCopied" class="i-carbon-checkmark" />
+            <div v-else class="i-carbon-copy" />
+            <span>{{ tokenCopied ? '已复制' : '复制' }}</span>
+          </button>
+        </div>
+        <div class="rounded bg-gray-100/50 px-2 py-1.5 font-mono text-[10px] text-gray-600 break-all dark:bg-gray-700/50 dark:text-gray-400">
+          {{ userStore.token }}
+        </div>
       </div>
     </div>
 

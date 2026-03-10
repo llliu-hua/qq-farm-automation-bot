@@ -83,10 +83,19 @@ function canUse(item: any) {
 }
 
 function handleSellClick(item: any) {
+  const totalPrice = (Number(item.count) || 0) * (Number(item.price) || 0)
+  const priceUnit = item.priceUnit || '金'
+  const messages = [
+    `确定要出售全部${item.name || `物品${item.id}`}吗？`,
+    `数量：${item.count || 0}`,
+  ]
+  if (totalPrice > 0) {
+    messages.push(`售出总金币：${totalPrice}${priceUnit}`)
+  }
   confirmModal.value = {
     show: true,
     title: '确认出售',
-    message: `确定要出售全部 ${item.name || `物品${item.id}`} 吗？\n数量：${item.count || 0}`,
+    message: messages.join('\n'),
     type: 'danger',
     loading: false,
     action: 'sell',

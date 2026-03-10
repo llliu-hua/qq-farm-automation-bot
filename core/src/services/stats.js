@@ -1,10 +1,47 @@
 const process = require('node:process');
-/**
- * 统计工具 - 重构版
- * 基于状态变化累加收益，而非依赖初始值快照
- */
+const path = require('node:path');
+const fs = require('node:fs');
 
-// 操作计数
+function getStatsFilePath(accountId) {
+    const dataDir = process.env.FARM_DATA_DIR || path.join(__dirname, '../../data');
+    return path.join(dataDir, 'stats', `${accountId}.json`);
+}
+
+function getTodayKey() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+function loadPersistedStats(accountId) {
+    try {
+        const filePath = getStatsFilePath(accountId);
+        if (!fs.existsSync(filePath)) return null;
+        const raw = fs.readFileSync(filePath, 'utf8');
+        if (!raw || !raw.trim()) return null;
+        return JSON.parse(raw);
+    } catch {
+        return null;
+    }
+}
+
+function savePersistedStats(accountId, data) {
+    try {
+        const filePath = getStatsFilePath(accountId);
+        const dir = path.dirname(filePath);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        const tmpPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+        fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf8');
+        fs.renameSync(tmpPath, filePath);
+    } catch {
+        // ignore
+    }
+}
+
 const operations = {
     harvest: 0,
     water: 0,
@@ -22,38 +59,57 @@ const operations = {
     levelUp: 0,
 };
 
-// 状态追踪
 const lastState = {
     gold: -1,
     exp: -1,
     coupon: -1,
 };
 
-// 会话初始总量（登录成功时记录）
 const initialState = {
     gold: null,
     exp: null,
     coupon: null,
 };
 
-// 本次会话累计收益
 const session = {
     goldGained: 0,
     expGained: 0,
     couponGained: 0,
-    lastExpGain: 0, // 最近一次经验增量
-    lastGoldGain: 0, // 最近一次金币增量
+    lastExpGain: 0,
+    lastGoldGain: 0,
 };
+
+let currentAccountId = null;
+let saveTimer = null;
 
 function recordOperation(type, count = 1) {
     if (operations[type] !== undefined) {
         operations[type] += count;
+        scheduleSave();
     }
 }
 
-/**
- * 初始化状态 (登录时调用)
- */
+function scheduleSave() {
+    if (!currentAccountId) return;
+    if (saveTimer) return;
+    saveTimer = setTimeout(() => {
+        saveTimer = null;
+        doSave();
+    }, 2000);
+}
+
+function doSave() {
+    if (!currentAccountId) return;
+    const todayKey = getTodayKey();
+    const data = {
+        date: todayKey,
+        operations: { ...operations },
+        initialState: { ...initialState },
+        savedAt: Date.now(),
+    };
+    savePersistedStats(currentAccountId, data);
+}
+
 function initStats(gold, exp, coupon = 0) {
     const g = Number.isFinite(Number(gold)) ? Number(gold) : 0;
     const e = Number.isFinite(Number(exp)) ? Number(exp) : 0;
@@ -66,32 +122,44 @@ function initStats(gold, exp, coupon = 0) {
     initialState.coupon = c;
 }
 
-/**
- * 更新状态并计算增量
- * 只要数值增加，就累加到 sessionGains
- */
+function initStatsWithPersistence(accountId, gold, exp, coupon = 0) {
+    currentAccountId = accountId;
+    const todayKey = getTodayKey();
+    const saved = loadPersistedStats(accountId);
+
+    if (saved && saved.date === todayKey) {
+        Object.keys(saved.operations || {}).forEach((key) => {
+            if (operations[key] !== undefined) {
+                operations[key] = Number(saved.operations[key]) || 0;
+            }
+        });
+        console.warn(`[统计] 已恢复今日统计数据: ${JSON.stringify(saved.operations)}`);
+    } else {
+        Object.keys(operations).forEach((key) => {
+            operations[key] = 0;
+        });
+        if (saved) {
+            console.warn(`[统计] 日期已变更，重置统计 (${saved.date} -> ${todayKey})`);
+        }
+    }
+
+    initStats(gold, exp, coupon);
+}
+
 function updateStats(currentGold, currentExp) {
-    // 首次初始化
     if (lastState.gold === -1) lastState.gold = currentGold;
     if (lastState.exp === -1) lastState.exp = currentExp;
 
-    // 计算金币增量
     if (currentGold > lastState.gold) {
         const delta = currentGold - lastState.gold;
         session.lastGoldGain = delta;
-        // console.warn(`[Stats] Gold +${delta}`);
     } else if (currentGold < lastState.gold) {
-        // 消费了金币，不计入收益，但要更新 lastState
-        // console.warn(`[Stats] Gold -${lastState.gold - currentGold}`);
         session.lastGoldGain = 0;
     }
     lastState.gold = currentGold;
 
-    // 计算经验增量 (经验通常只增不减)
     if (currentExp > lastState.exp) {
         const delta = currentExp - lastState.exp;
-        
-        // 防抖: 如果 1秒内 增加了完全相同的 delta，视为重复包忽略
         const now = Date.now();
         if (delta === session.lastExpGain && (now - (session.lastExpTime || 0) < 1000)) {
             console.warn(`[系统] 忽略重复经验增量 +${delta}`);
@@ -106,7 +174,6 @@ function updateStats(currentGold, currentExp) {
     lastState.exp = currentExp;
 }
 
-// 兼容旧接口，重定向到 updateStats
 function recordGoldExp(gold, exp) {
     updateStats(gold, exp);
 }
@@ -139,7 +206,6 @@ function getStats(statusData, userState, connected, limits) {
     const statusObj = (statusData && typeof statusData === 'object') ? statusData : {};
     const userObj = (userState && typeof userState === 'object') ? userState : {};
 
-    // 优先使用 network 层 userState（通常是最新实时值），statusData 仅作为兜底
     const rawGold = (userObj.gold !== null && userObj.gold !== undefined) ? userObj.gold : statusObj.gold;
     const rawExp = (userObj.exp !== null && userObj.exp !== undefined) ? userObj.exp : statusObj.exp;
     const rawCoupon = (userObj.coupon !== null && userObj.coupon !== undefined) ? userObj.coupon : statusObj.coupon;
@@ -147,11 +213,8 @@ function getStats(statusData, userState, connected, limits) {
     const currentExp = Number.isFinite(Number(rawExp)) ? Number(rawExp) : 0;
     const currentCoupon = Number.isFinite(Number(rawCoupon)) ? Number(rawCoupon) : 0;
 
-    // 仅在连接就绪后统计，避免登录前 0 -> 登录后真实值被误计为收益
     if (connected) {
-        // 兜底统计：即使状态钩子漏掉，也会按当前总值差量累计收益
         updateStats(currentGold, currentExp);
-        // 会话总增量 = 当前总量 - 初始总量（不依赖具体操作）
         recomputeSessionTotals(currentGold, currentExp, currentCoupon);
     }
 
@@ -177,12 +240,18 @@ function getStats(statusData, userState, connected, limits) {
     };
 }
 
+function saveStats() {
+    doSave();
+}
+
 module.exports = {
     recordOperation,
     initStats,
+    initStatsWithPersistence,
     updateStats,
-    setInitialValues, // 兼容旧接口
-    recordGoldExp,    // 兼容旧接口
+    setInitialValues,
+    recordGoldExp,
     resetSessionGains,
     getStats,
+    saveStats,
 };

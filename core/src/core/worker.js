@@ -17,7 +17,7 @@ const { performDailyMonthCardGift, getMonthCardDailyState } = require('../servic
 const { performDailyVipGift, getVipDailyState } = require('../services/qqvip');
 const { createScheduler, getSchedulerRegistrySnapshot } = require('../services/scheduler');
 const { performDailyShare, getShareDailyState } = require('../services/share');
-const { setInitialValues, resetSessionGains, recordOperation } = require('../services/stats');
+const { setInitialValues, resetSessionGains, recordOperation, initStatsWithPersistence, saveStats } = require('../services/stats');
 const { initStatusBar, setStatusPlatform, statusData } = require('../services/status');
 const { setRecordGoldExpHook } = require('../services/status');
 const { cleanupTaskSystem, checkAndClaimTasks, getTaskClaimDailyState, getTaskDailyStateLikeApp, getGrowthTaskStateLikeApp } = require('../services/task');
@@ -525,7 +525,8 @@ async function startBot(config) {
         }
         // 登录成功后，以当前金币/经验/点券作为统计基线，并清空会话增量
         const latest = getUserState();
-        setInitialValues(Number(latest.gold || 0), Number(latest.exp || 0), Number(latest.coupon || 0));
+        const accountId = process.env.FARM_ACCOUNT_ID || '';
+        initStatsWithPersistence(accountId, Number(latest.gold || 0), Number(latest.exp || 0), Number(latest.coupon || 0));
         resetSessionGains();
 
         // 登录成功后启动各模块
@@ -561,6 +562,7 @@ async function startBot(config) {
 
 async function stopBot() {
     if (!isRunning) return exitWorker(0);
+    saveStats();
     isRunning = false;
     loginReady = false;
     stopUnifiedScheduler();
