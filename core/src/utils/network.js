@@ -46,6 +46,7 @@ const userState = {
     gold: 0,
     exp: 0,
     coupon: 0, // 点券(ID:1002)
+    goldBean: 0, // 金豆豆(ID:1005)
 };
 
 function getUserState() { return userState; }
@@ -257,6 +258,13 @@ function handleNotify(msg) {
                             userState.coupon = count;
                         } else if (delta !== 0) {
                             userState.coupon = Math.max(0, Number(userState.coupon || 0) + delta);
+                        }
+                    } else if (id === 1005) {
+                        // 金豆豆
+                        if (count > 0) {
+                            userState.goldBean = count;
+                        } else if (delta !== 0) {
+                            userState.goldBean = Math.max(0, Number(userState.goldBean || 0) + delta);
                         }
                     }
                 }

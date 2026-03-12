@@ -513,6 +513,15 @@ useIntervalFn(updateCountdowns, 1000)
               {{ (status?.sessionCouponGained || 0) > 0 ? '+' : '' }}{{ status?.sessionCouponGained || 0 }}
             </div>
           </div>
+          <div class="text-right">
+            <div class="flex items-center justify-end gap-1.5 text-xs text-gray-500">
+              <div class="i-carbon-circle text-amber-500" />
+              金豆豆
+            </div>
+            <div class="text-2xl text-amber-500 font-bold dark:text-amber-400">
+              {{ status?.status?.goldBean || 0 }}
+            </div>
+          </div>
         </div>
         <div class="mt-4 border-t border-gray-100 pt-3 dark:border-gray-700">
           <div class="flex items-center justify-between">

@@ -1564,7 +1564,7 @@ async function checkFriends(options = {}) {
             return helpB - helpA;
         });
 
-        const totalActions = { steal: 0, water: 0, weed: 0, bug: 0 };
+        const totalActions = { steal: 0, water: 0, weed: 0, bug: 0, putBug: 0, putWeed: 0 };
 
         // 第二阶段：批量偷菜
         if (stealFriends.length > 0 && effectiveStealEnabled) {
@@ -1623,12 +1623,73 @@ async function checkFriends(options = {}) {
             log('好友', '批量帮助循环结束', { module: 'friend', event: '批量帮助结束' });
         }
 
+        // 第四阶段：批量捣乱（放虫放草）
+        if (effectiveBadEnabled) {
+            log('好友', '开始自动放虫放草', { module: 'friend', event: '开始自动放虫放草' });
+            
+            const badFriends = [];
+            const badVisitedGids = new Set();
+            
+            for (const f of friends) {
+                const gid = toNum(f.gid);
+                if (gid === state.gid) continue;
+                if (badVisitedGids.has(gid)) continue;
+                if (blacklist.has(gid)) continue;
+
+                const name = f.remark || f.name || `GID:${gid}`;
+                const p = f.plant;
+                const stealNum = p ? toNum(p.steal_plant_num) : 0;
+                const dryNum = p ? toNum(p.dry_num) : 0;
+                const weedNum = p ? toNum(p.weed_num) : 0;
+                const insectNum = p ? toNum(p.insect_num) : 0;
+
+                // 只有没有可偷、可帮助的好友才考虑捣乱
+                if (stealNum === 0 && dryNum === 0 && weedNum === 0 && insectNum === 0) {
+                    const level = toNum(f.level);
+                    badFriends.push({ gid, name, level });
+                }
+
+                badVisitedGids.add(gid);
+            }
+
+            // 按等级降序排序，优先处理等级高的好友
+            badFriends.sort((a, b) => b.level - a.level);
+
+            // 只取等级最高的前20个
+            const topBadFriends = badFriends.slice(0, 20);
+            
+            if (topBadFriends.length > 0) {
+                log('好友', `找到 ${badFriends.length} 个可捣乱的好友，处理等级最高的前${topBadFriends.length}个`, { module: 'friend', event: '放虫放草好友列表', totalCount: badFriends.length, topCount: topBadFriends.length });
+
+                for (let i = 0; i < topBadFriends.length; i++) {
+                    const friend = topBadFriends[i];
+
+                    // 检查是否还有捣乱次数
+                    const canPutBug = canOperate(10004);
+                    const canPutWeed = canOperate(10003);
+                    if (!canPutBug && !canPutWeed) {
+                        log('好友', `放虫放草次数已用完，停止执行`, { module: 'friend', event: '放虫放草次数用完' });
+                        break;
+                    }
+
+                    try {
+                        await visitFriend(friend, totalActions, state.gid, state.accountId);
+                    } catch (e) {
+                        // 单个好友失败不影响整体
+                    }
+                    await sleep(500);
+                }
+            }
+        }
+
         // 生成总结日志
         const summary = [];
         if (totalActions.steal > 0) summary.push(`偷${totalActions.steal}`);
         if (totalActions.weed > 0) summary.push(`除草${totalActions.weed}`);
         if (totalActions.bug > 0) summary.push(`除虫${totalActions.bug}`);
         if (totalActions.water > 0) summary.push(`浇水${totalActions.water}`);
+        if (totalActions.putBug > 0) summary.push(`放虫${totalActions.putBug}`);
+        if (totalActions.putWeed > 0) summary.push(`放草${totalActions.putWeed}`);
 
         const totalVisited = stealFriends.length + helpFriends.length;
         if (summary.length > 0) {

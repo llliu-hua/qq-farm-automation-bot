@@ -209,9 +209,11 @@ function getStats(statusData, userState, connected, limits) {
     const rawGold = (userObj.gold !== null && userObj.gold !== undefined) ? userObj.gold : statusObj.gold;
     const rawExp = (userObj.exp !== null && userObj.exp !== undefined) ? userObj.exp : statusObj.exp;
     const rawCoupon = (userObj.coupon !== null && userObj.coupon !== undefined) ? userObj.coupon : statusObj.coupon;
+    const rawGoldBean = (userObj.goldBean !== null && userObj.goldBean !== undefined) ? userObj.goldBean : statusObj.goldBean;
     const currentGold = Number.isFinite(Number(rawGold)) ? Number(rawGold) : 0;
     const currentExp = Number.isFinite(Number(rawExp)) ? Number(rawExp) : 0;
     const currentCoupon = Number.isFinite(Number(rawCoupon)) ? Number(rawCoupon) : 0;
+    const currentGoldBean = Number.isFinite(Number(rawGoldBean)) ? Number(rawGoldBean) : 0;
 
     if (connected) {
         updateStats(currentGold, currentExp);
@@ -226,6 +228,7 @@ function getStats(statusData, userState, connected, limits) {
             level: statusObj.level || userObj.level || 0,
             gold: currentGold,
             coupon: Number.isFinite(Number(userObj.coupon)) ? Number(userObj.coupon) : 0,
+            goldBean: currentGoldBean,
             exp: currentExp,
             platform: statusObj.platform || userObj.platform || 'qq',
         },
